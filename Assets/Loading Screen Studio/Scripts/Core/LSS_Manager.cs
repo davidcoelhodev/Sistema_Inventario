@@ -8,84 +8,42 @@ namespace Michsky.LSS
     [AddComponentMenu("Loading Screen Studio/LSS Manager")]
     public class LSS_Manager : MonoBehaviour
     {
-        // Configurações
-        [SerializeField]
-        [Tooltip("Modo de carregamento da cena (Single ou Additive)")]
-        private LoadingMode loadingMode;
+        // Settings
+        public LoadingMode loadingMode;
+        public string presetName = "Default";
+        public bool enableTrigger;
+        public bool onTriggerExit;
+        public bool loadWithTag;
+        public bool startLoadingAtStart;
+        public string objectTag;
+        public string sceneName;
 
-        [SerializeField]
-        [Tooltip("Nome do preset de carregamento")]
-        private string presetName = "Default";
-
-        [SerializeField]
-        [Tooltip("Ativar gatilho de carregamento")]
-        private bool enableTrigger;
-
-        [SerializeField]
-        [Tooltip("Carregar cena ao sair do gatilho")]
-        private bool onTriggerExit;
-
-        [SerializeField]
-        [Tooltip("Carregar cena por tag do objeto")]
-        private bool loadWithTag;
-
-        [SerializeField]
-        [Tooltip("Iniciar carregamento automaticamente ao iniciar o jogo")]
-        private bool startLoadingAtStart;
-
-        [SerializeField]
-        [Tooltip("Tag do objeto a ser detectado")]
-        private string objectTag;
-
-        [SerializeField]
-        [Tooltip("Nome da cena a ser carregada")]
-        private string sceneName;
-
-        // Áudio suave
-        [Range(0, 10)]
-        [Tooltip("Duração da transição suave de volume do áudio")]
-        public float audioFadeDuration = 2;
-
-        [Tooltip("Lista de fontes de áudio a serem manipuladas")]
+        // Smooth Audio
+        [Range(0, 10)] public float audioFadeDuration = 2;
         public List<AudioSource> audioSources = new List<AudioSource>();
 
-        // Variáveis temporárias
-        [Tooltip("Lista de telas de carregamento disponíveis")]
+        // Temp Variables
         public Object[] loadingScreens;
-
-        [Tooltip("Índice de carregamento selecionado")]
         public int selectedLoadingIndex = 0;
-
-        [Tooltip("Índice da tag selecionada")]
         public int selectedTagIndex = 0;
 
-        // Eventos
-        [Tooltip("Evento acionado no início do carregamento")]
+        // Events
         public UnityEvent onLoadingStart;
-
-        [Tooltip("Objetos que não serão destruídos ao carregar novas cenas")]
         public List<GameObject> dontDestroyOnLoad = new List<GameObject>();
 
-        // Apenas modo Additive
+        // Additive Only
         [SerializeField] private List<string> loadedScenes = new List<string>();
 
 #if UNITY_EDITOR
         public bool lockSelection = false;
 #endif
 
-        // Definição do modo de carregamento
         public enum LoadingMode { Single, Additive }
 
         void Start()
         {
-            if (startLoadingAtStart && loadingMode == LoadingMode.Single)
-            {
-                LoadScene(sceneName);
-            }
-            else if (startLoadingAtStart && loadingMode == LoadingMode.Additive)
-            {
-                LoadSceneAdditive(sceneName);
-            }
+            if (startLoadingAtStart == true && loadingMode == LoadingMode.Single) { LoadScene(sceneName); }
+            else if (startLoadingAtStart == true && loadingMode == LoadingMode.Additive) { LoadSceneAdditive(sceneName); }
         }
 
         public void SetPreset(string styleName)
@@ -93,22 +51,17 @@ namespace Michsky.LSS
             presetName = styleName;
         }
 
-        // Carregar cena em modo Single
         public void LoadScene(string sceneName)
         {
             LSS_LoadingScreen.presetName = presetName;
             LSS_LoadingScreen.LoadScene(sceneName);
 
-            foreach (var obj in dontDestroyOnLoad)
-            {
-                DontDestroyOnLoad(obj);
-            }
-
-            if (audioSources.Count > 0)
+            for (int i = 0; i < dontDestroyOnLoad.Count; i++) { DontDestroyOnLoad(dontDestroyOnLoad[i]); }
+            if (audioSources.Count != 0) 
             {
                 foreach (AudioSource asg in audioSources)
                 {
-                    var tempAS = asg.gameObject.AddComponent<LSS_AudioSource>();
+                    LSS_AudioSource tempAS = asg.gameObject.AddComponent<LSS_AudioSource>();
                     tempAS.audioSource = asg;
                     tempAS.audioFadeDuration = audioFadeDuration;
                     tempAS.DoFadeOut();
@@ -118,17 +71,19 @@ namespace Michsky.LSS
             onLoadingStart.Invoke();
         }
 
-        // Carregar cena em modo Additive
         public void LoadSceneAdditive(string sceneName)
         {
             LSS_LoadingScreen.LoadSceneAdditive(sceneName);
             loadedScenes.Add(SceneManager.GetSceneByName(sceneName).name);
 
-            if (audioSources.Count > 0)
+            if (audioSources.Count != 0)
             {
                 foreach (AudioSource asg in audioSources)
                 {
-                    var tempAS = asg.gameObject.AddComponent<LSS_AudioSource>();
+                    if (asg == null)
+                        continue;
+
+                    LSS_AudioSource tempAS = asg.gameObject.AddComponent<LSS_AudioSource>();
                     tempAS.audioSource = asg;
                     tempAS.audioFadeDuration = audioFadeDuration;
                     tempAS.DoFadeOut();
@@ -138,33 +93,86 @@ namespace Michsky.LSS
             onLoadingStart.Invoke();
         }
 
-        // Ações de gatilho para carregar cenas
+        public void LoadSceneAdditiveInstant(string sceneName)
+        {
+            SceneManager.LoadScene(sceneName, LoadSceneMode.Additive);
+            loadedScenes.Add(SceneManager.GetSceneByName(sceneName).name);
+
+            if (audioSources.Count != 0)
+            {
+                foreach (AudioSource asg in audioSources)
+                {
+                    if (asg == null)
+                        continue;
+
+                    LSS_AudioSource tempAS = asg.gameObject.AddComponent<LSS_AudioSource>();
+                    tempAS.audioSource = asg;
+                    tempAS.audioFadeDuration = audioFadeDuration;
+                    tempAS.DoFadeOut();
+                }
+            }
+
+            onLoadingStart.Invoke();
+        }
+
+        public void UnloadAdditiveScene(string sceneName)
+        {
+            SceneManager.UnloadSceneAsync(sceneName);
+            loadedScenes.Remove(sceneName);
+        }
+
+        public void UnloadActiveAdditiveScenes()
+        {
+            foreach (string tempScene in loadedScenes) { SceneManager.UnloadSceneAsync(tempScene); }
+            loadedScenes.Clear();
+        }
+
+        public void SetSingle()
+        {
+            loadingMode = LoadingMode.Single;
+        }
+
+        public void SetAdditive()
+        {
+            loadingMode = LoadingMode.Additive;
+        }
+
         void DoTriggerActions()
         {
             LSS_LoadingScreen.presetName = presetName;
 
-            if (loadingMode == LoadingMode.Single)
-            {
-                LSS_LoadingScreen.LoadScene(sceneName);
-            }
-            else if (loadingMode == LoadingMode.Additive)
-            {
-                LSS_LoadingScreen.LoadSceneAdditive(sceneName);
-            }
+            if (loadingMode == LoadingMode.Single) { LSS_LoadingScreen.LoadScene(sceneName); }
+            if (loadingMode == LoadingMode.Additive) { LSS_LoadingScreen.LoadSceneAdditive(sceneName); }
         }
 
         private void OnTriggerEnter(Collider other)
         {
-            if (!enableTrigger || onTriggerExit) return;
-            if (loadWithTag && other.gameObject.tag != objectTag) return;
+            if (!enableTrigger || onTriggerExit) { return; }
+            if (loadWithTag && other.gameObject.tag != objectTag) { return; }
+
+            DoTriggerActions();
+        }
+
+        private void OnTriggerEnter2D(Collider2D other)
+        {
+            if (!enableTrigger || onTriggerExit) { return; }
+            if (loadWithTag && other.gameObject.tag != objectTag) { return; }
 
             DoTriggerActions();
         }
 
         private void OnTriggerExit(Collider other)
         {
-            if (!enableTrigger || !onTriggerExit) return;
-            if (loadWithTag && other.gameObject.tag != objectTag) return;
+            if (!enableTrigger || !onTriggerExit) { return; }
+            if (loadWithTag && other.gameObject.tag != objectTag) { return; }
+
+            DoTriggerActions();
+        }
+
+        private void OnTriggerExit2D(Collider2D other)
+        {
+            if (!enableTrigger || !onTriggerExit) { return; }
+            if (loadWithTag && other.gameObject.tag != objectTag) { return; }
 
             DoTriggerActions();
         }
